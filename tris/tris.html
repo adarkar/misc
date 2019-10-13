@@ -1,0 +1,138 @@
+<html>
+<head></head>
+<body>
+
+<svg id="svg" width="800" height="800">
+  <g v-for="sq in sqs"
+     v-bind:transform="sq.tr"
+     v-bind:onclick="sq.onclick">
+    <rect x="0" y="0" v-bind:width="size" v-bind:height="size"
+          style="stroke: black; stroke-width: 1px; fill: azure;">
+    </rect>
+    <circle v-bind:cx="size/2" v-bind:cy="size/2" v-bind:r="size*0.3"
+            v-if="sq.mark>=0" v-bind:style="sq.style"
+            v-bind:stroke-width="size*0.15"
+            v-bind:stroke-opacity="wpos.nowin || sq.win ? 1 : 0.5"
+            v-bind:fill-opacity="sq.win ? 1 : 0">
+    </circle>
+  </g>
+</svg>
+
+<script src="vue.min.js"></script>
+<script src="redux.js"></script>
+<script>
+
+var store = Redux.createStore((st = {
+    turn: 0,
+    board: Array(9).fill(0).map((d,i)=>-1),
+    win: -1,
+    wpos: { nowin: 1 }
+  }, msg) => {
+    switch (msg.type) {
+    case "move":
+      if (st.turn == -1) return st;
+      if (st.board[msg.i] >= 0) return st;
+      let s = Object.assign({}, st);
+      s.board[msg.i] = st.turn;
+      var ov = isGameover(s.board);
+      s.turn = ov.o ? -1 : 1 - st.turn;
+      s.win = ov.w;
+      if (ov.w >= 0) s.wpos = ov.p;
+      return s;
+    default:
+      return st;
+    }
+});
+
+function isGameover(b) {
+  function row(f) {
+    return (i) => {
+      return f==0 ? {o: b[  i] >= 0 && b[  i] == b[  i+3] && b[  i] == b[  i+6], w: b[i], p: {f:f, i:i}}
+           : f==1 ? {o: b[3*i] >= 0 && b[3*i] == b[3*i+1] && b[3*i] == b[3*i+2], w: b[i], p: {f:f, i:i}}
+           : ((j,k)=>({o: b[j] >= 0 && b[j] == b[j+k] && b[j] == b[j+2*k], w: b[j], p: {f:f, i:i}})
+             )(2*i,4-2*i);
+    };
+  }
+  var y =  ([0,1,2].map(row(0)))
+    .concat([0,1,2].map(row(1)))
+    .concat([0,1]  .map(row(2)))
+    .reduce((a,b)=>({o: a.o||b.o, w: a.o?a.w:b.w, p: a.o?a.p:b.p}));
+  return {o: y.o||b.filter(x=>x<0).length==0
+         ,w: y.o?y.w:-1
+         ,p: y.p};
+}
+
+function move(i) {
+  if (store.getState().turn == 0) {
+    store.dispatch({type:"move", i:i});
+  }
+  setTimeout(()=>{
+    var st = store.getState();
+    if (st.turn == 1) {
+      var a = ai(st.board);
+      store.dispatch({type:"move", i:a});
+    }
+  }, 500);
+}
+
+store.subscribe(() => {
+  var st = store.getState();
+  var b = st.board;
+  vue.board = Array(b.length).fill(0).map((d,i)=>b[i]);
+  vue.wpos = st.wpos;
+});
+
+var itox = i => i%3;
+var itoy = i => Math.floor(i/3);
+var size = 200;
+
+var vue = new Vue({
+  el: "#svg",
+  data: {
+    size: size,
+    board: store.getState().board,
+    wpos: {}
+  },
+  computed: {
+    sqs: function() {
+      return Array(9).fill(0).map((d,i)=>({
+        onclick: "move("+i+")",
+        mark: this.board[i],
+        style: "stroke:" + (this.board[i]==0 ? "crimson" : "gold")
+             + ";fill:" + (this.board[i]==0 ? "crimson" : "gold"),
+        tr: "translate("+(this.size*itox(i))+","+(this.size*itoy(i))+")",
+        win: (()=>{
+            var wp = this.wpos;
+            return wp.nowin ? false :
+                 wp.f == 0 && wp.i == itox(i)
+              || wp.f == 1 && wp.i == itoy(i)
+              || wp.i == 0 && [0,4,8].includes(i)
+              || wp.i == 1 && [2,4,6].includes(i)
+          })()
+    }))}
+  }
+});
+
+function lArySet(a,i,x) { return a.map((d,j)=>j==i?x:d); }
+
+function lSearchMap(a,p,f) {
+  var y = a.map(d=>({d:d,p:p(d)})).filter(d=>d.p);
+  return y.length > 0 ? f(y[0].d) : undefined;
+}
+
+function ai(b) {
+  var self = 1;
+  var m = b.map((d,i)=>({d:d,i:i})).filter(x=>x.d<0);
+  var x = lSearchMap(m, d=>isGameover(lArySet(b,d.i,self)).o, d=>d.i);
+  if (x != undefined) return x;
+  x = lSearchMap(m, d=>isGameover(lArySet(b,d.i,1-self)).o, d=>d.i);
+  if (x != undefined) return x;
+  var i = [0,2,6,8,4].find(i=>b[i]<0);
+  if (i != undefined) return i;
+
+  return m[Math.floor(Math.random() * m.length)].i;
+}
+
+</script>
+</body>
+</html>
