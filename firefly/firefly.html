@@ -1,0 +1,126 @@
+<html>
+<head></head>
+<body>
+<svg id="svg" width="100%" height="100%"></svg>
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script>
+
+function f0(c) {
+  return {
+    s: Math.random(),
+    fire_t: undefined,
+    fire: false,
+    x: Math.random() * c.w,
+    y: Math.random() * c.h,
+    vx: Math.random() - 0.5,
+    vy: Math.random() - 0.5
+  };
+}
+
+function init(c) {
+  var ffs = Array(c.nf).fill(0).map(() => f0(c));
+
+  d3.select("#svg")
+    .on("click", function() {
+      var m = d3.mouse(this);
+      var ff = f0(c);
+      ff.x = m[0];
+      ff.y = m[1];
+      ff.s = 0;
+      ff.fire_t = 0;
+      ffs.push(ff);
+    })
+    .append("rect").classed("bg", true)
+    .attr("x", 0).attr("y", 0)
+    .attr("width", "100%").attr("height", "100%")
+    .style("fill", "black")
+  ;
+
+  return ffs;
+}
+
+function step(conf, ffs) {
+  if (Math.random() < conf.dt / conf.t_spawn)
+    ffs.splice(Math.floor(Math.random()*ffs.length), 1);
+  if (Math.random() < conf.dt / conf.t_spawn)
+    ffs.push(f0(conf));
+
+  var fire = 0;
+
+  ffs.map(ff => {
+    ff.fire_t += conf.dt;
+    ff.s = ff.s + (1 - ff.s) / conf.a_charge * conf.dt;
+    if (ff.fire = ff.s > conf.fthr) {
+      fire++;
+      ff.s = 0;
+      ff.fire_t = 0;
+    }
+  });
+
+  ffs.filter(ff => !ff.fire).map(ff => {
+    ff.s += conf.fireweight(fire) * conf.ds;
+    if (ff.s > conf.fthr) {
+      ff.s = 0;
+      ff.fire_t = 0;
+    }
+  });
+
+  ffs.map(ff => {
+    ff.x += ff.vx;
+    if (ff.x < 0) ff.x = conf.w;
+    else if (ff.x > conf.w) ff.x = 0;
+    ff.y += ff.vy;
+    if (ff.y < 0) ff.y = conf.h;
+    else if (ff.y > conf.h) ff.y = 0;
+  });
+}
+
+function render(conf, ffs) {
+  d3.select("#svg")
+    .selectAll("circle.ff").data(ffs)
+    .join(en => en
+      .append("circle").classed("ff", true)
+    )
+    .attr("transform", d => {
+      var x = d.x;
+      var y = d.y;
+      return "translate("+x+", "+y+")";
+    })
+    .attr("r", 2)
+    .style("fill", "gold")
+    .style("opacity", d => isNaN(d.fire_t) ? 0 :
+      (() => {
+        var h = 0.2;
+        var a = Math.tan(Math.PI * h);
+        var y = 1/2 + Math.atan((1 - d.fire_t/conf.t_light) / a) / Math.PI;
+        return y / (1-h);
+      })()
+    )
+  ;
+}
+
+function run(conf, ffs) {
+  step(conf, ffs);
+  render(conf, ffs);
+  setTimeout(() => run(conf, ffs), conf.dt * 1000);
+}
+
+var conf = {
+  nf: 60,
+  fireweight: n => 1 - Math.exp(-n),
+  fthr: 1 - Math.exp(-1),
+  ds: 0.03,
+  dt: 0.020,
+  a_charge: 3,
+  t_light: 0.1,
+  t_spawn: 20,
+  w: window.innerWidth,
+  h: window.innerHeight
+};
+
+var ffs = init(conf);
+run(conf, ffs);
+
+</script>
+</body>
+</html>
